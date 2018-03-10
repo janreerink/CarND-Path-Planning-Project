@@ -1,6 +1,17 @@
 # CarND-Path-Planning-Project
-Test update to readme.
 Self-Driving Car Engineer Nanodegree Program
+
+## Writeup
+
+In this project main.cpp listens to data from the term 3 simulator and uses trajectory and sensor fusion information to plan a path along the map. 
+
+Main.cpp provides a path to the simulator in the form of x and y coordinates that the simulator will visit in 20 ms increments. As finding an optimal path can take longer than 20 ms the provided path
+may be slighty outdated when it is sent to the simulator. Hence information form the last provided path is used in the current path in order to provide a smooth transition between outdated and new paths.
+The more past path information is used, the smoother the transition. However, when using more outdated information there is a risk that recent changes (e.g. other vehicle's speed or lane changes) are not
+considered in time.
+
+The c++ code reads a CSV file with waypoints that provide x,y and Frenet coordinates along the road path. As the track is approx. 7km long and only 181 waypoints are provided it is necessary to interpolate
+between waypoints, using the suggested Spline library.
    
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
