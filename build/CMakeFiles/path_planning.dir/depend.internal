@@ -160,6 +160,10 @@ CMakeFiles/path_planning.dir/src/main.cpp.o
  /root/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/CommonCwiseUnaryOps.h
  /root/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseBinaryOps.h
  /root/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
+ /root/CarND-Path-Planning-Project/src/PID.cpp
+ /root/CarND-Path-Planning-Project/src/PID.h
+ /root/CarND-Path-Planning-Project/src/change.cpp
+ /root/CarND-Path-Planning-Project/src/change.h
  /root/CarND-Path-Planning-Project/src/json.hpp
  /root/CarND-Path-Planning-Project/src/main.cpp
  /root/CarND-Path-Planning-Project/src/spline.h

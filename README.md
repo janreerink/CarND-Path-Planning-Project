@@ -5,13 +5,36 @@ Self-Driving Car Engineer Nanodegree Program
 
 In this project main.cpp listens to data from the term 3 simulator and uses trajectory and sensor fusion information to plan a path along the map. 
 
-Main.cpp provides a path to the simulator in the form of x and y coordinates that the simulator will visit in 20 ms increments. As finding an optimal path can take longer than 20 ms the provided path
-may be slighty outdated when it is sent to the simulator. Hence information form the last provided path is used in the current path in order to provide a smooth transition between outdated and new paths.
-The more past path information is used, the smoother the transition. However, when using more outdated information there is a risk that recent changes (e.g. other vehicle's speed or lane changes) are not
-considered in time.
+Main.cpp provides a path to the simulator in the form of x and y coordinates that the simulator will visit in 20 ms increments. As finding an optimal path can take longer than 20 ms the provided path may be slighty outdated when it is sent to the simulator. Hence information form the last provided path is used in the current path in order to provide a smooth transition between outdated and new paths.
+The more past path information is used, the smoother the transition. However, when using more outdated information there is a risk that recent changes (e.g. other vehicle's speed or lane changes) are not considered in time.
 
-The c++ code reads a CSV file with waypoints that provide x,y and Frenet coordinates along the road path. As the track is approx. 7km long and only 181 waypoints are provided it is necessary to interpolate
-between waypoints, using the suggested Spline library.
+The c++ code reads a CSV file with waypoints that provide x,y and Frenet coordinates along the road path. As the track is approx. 7km long and only 181 waypoints are provided it is necessary to interpolate between waypoints, using the suggested Spline library.
+
+
+Intermediate points are calculated using splines as shown in the walkthrough video. Speed is controlled by setting a reference value that is increment with acceptable
+acceleration values if no obstacles are present, up to a speed just below the speed limit. The segment of the walkthrough video that shows how to initiate lane-changes depending on distances for cars in front is used as starting point for some more functions contained in change.cpp that help finding the best lane and checking if switching lanes is possible.
+
+
+If the car encounters a slow moving vehicle in its own lane within a certain distance it tries to switch lanes if possible:
+-the ego-vehicle will try to maintain a safe distance to the leading vehicle by using distance to leading vehicle in Frenet coordinates as input to a PID controller. It identifies the closest vehicle in the same lane and maintains a distance of 20 meters.
+-the ego vehicle will check other lanes by getting the minimum speed of vehicles in front per lane, unless a lane-change was performed recently
+	-the car will try to change into an adjacent lane if the minimum speed there is higher than in its own lane
+		-if the car is in center lane it will try to pick the faster of the two remaining lanes
+		-if the car is in the right or left lane it will switch to the adjacent lane if the speed there is better
+		-if the car is in the right or left lane and the speed in adjacent lane is worse, but the speed in the far lane is much better it will still try to switch to 
+		the adjacent lane (and then re-evaluate in the next cycle)
+	-for the target lane the following feasibility test is performed:
+		-for each car in target lane extrapolate position, extrapolate own position based on remaining points in path sent to simulator
+		- get distance to car based on current and extrapolated positions
+		-if no cars are within these two distances the target lane is returned to main.cpp for execution, otherwise the current lane is returned
+
+A simple function to check for lane changes of other cars is used to increment the timer that prevents lane changes of the ego-car. This could not be tested
+well as lane-changes by other cars did not occur frequently.
+
+Some tuneable parameters are the range up to which vehicles in front are considered for the minimum lane speed as well as the safety distance before 
+lane changes. The controller probably also needs some tuning.
+
+
    
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).

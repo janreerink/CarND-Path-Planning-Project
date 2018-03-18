@@ -9,7 +9,10 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
-
+#include "change.h"
+#include "change.cpp"
+#include "PID.h"
+#include "PID.cpp"
 using namespace std;
 
 // for convenience
@@ -179,6 +182,7 @@ int main() {
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
 
+
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
   string line;
@@ -202,7 +206,16 @@ int main() {
   }
   double ref_vel = 0 ; // MPH; initially 0, then incrementally change depending on dist to car in front
   int lane = 1 ; //  current lane (0,1,2 : left, middle, right)
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &ref_vel, &lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  int timer = 0; // counter used to force wait times between lane changes
+  int last_lane_change = 0; // remember cycle of last lanechange
+
+  PID pid; //controller for distance to car in front
+  double Kp_i = 0.12;  //proportional term
+  double Ki_i = 0.0; // integrative term
+  double Kd_i = 3.9; // differential term
+  pid.Init(Kp_i, Ki_i, Kd_i);
+
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &ref_vel, &lane, &timer, &last_lane_change, &pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -221,6 +234,8 @@ int main() {
         if (event == "telemetry") {
           // j[1] is the data JSON object
           
+        	int wp_spacing = 30.0; // tuneable parameter for WP interpolation
+
         	// Main car's localization Data
           	double car_x = j[1]["x"];
           	double car_y = j[1]["y"];
@@ -240,45 +255,100 @@ int main() {
           	auto sensor_fusion = j[1]["sensor_fusion"];
 
 
-
-
-
           	int prev_size = previous_path_x.size(); // size of leftover points from last path
-
+          	double car_s_current = car_s;
           	if(prev_size > 0)
           	{
           		car_s = end_path_s;
           	}
+
           	bool too_close = false;
-          	// loop through vehicles in sensor_fusion vector
-          	for(int i = 0; i < sensor_fusion.size(); i++)
+          	int r_lane = lane; // recommended lane to change into
+          	double min_s = 999999; // find nearest car in front in my lane, otherwise results may be overwritten by next car
+          	int min_s_idx = 999999; // find nearest car in front, otherwise results may be overwritten by next car
+          	cout<<"car_s_current: " << car_s_current << "\n";
+          	for(int i = 0; i < sensor_fusion.size(); i++) // loop through vehicles in sensor_fusion vector
           	{
           		float d = sensor_fusion[i][6];
-          			// find vehicles in my lane
-          			if(d < (2+4*lane+2) && d > (2+4*lane-2))
-          			{
-          			double vx = sensor_fusion[i][3];
-          			double vy = sensor_fusion[i][4];
-          			double check_speed = sqrt(vx*vx + vy *vy);
-          			double check_car_s = sensor_fusion[i][5];
-
-          			check_car_s += ((double)prev_size * 0.02 * check_speed); //extrapolate veh s position
-          			if ((check_car_s > car_s) && ((check_car_s-car_s)< 30)) // car close in front
-          			{
-          				//ref_vel = 29.5;
-          				too_close = true;
-          				if (lane > 0) //switch lanes
-          					{lane = 0; }
-          			}
-          			}
+          		double that_s = sensor_fusion[i][5]; //no pun intended
+				double vx = sensor_fusion[i][3];
+				double vy = sensor_fusion[i][4];
+				double check_speed = sqrt(vx*vx + vy *vy);
+          		that_s += ((double)prev_size * 0.02 * check_speed); //extrapolate veh s position
+          		//cout<<"that_s: " << that_s << "\n";
+          		if( (d < (2+4*lane+2)) && (d > (2+4*lane-2)) ) //in my lane
+					{
+          			if (car_s < that_s) //in front
+						{
+							if (that_s < min_s)
+							{	min_s = that_s;
+								min_s_idx = i;
+							}
+						}
+					}
           	}
+          	//cout<<"min_s_idx: " << min_s_idx << "\n";
+
+          	if (min_s != 999999 && min_s_idx != 999999) // in case no car in this lane in sensor range
+          		{
+          		cout<<"in 999999 if \n";
+				double vx = sensor_fusion[min_s_idx][3];
+				double vy = sensor_fusion[min_s_idx][4];
+				double check_speed = sqrt(vx*vx + vy *vy);
+				double check_car_s = sensor_fusion[min_s_idx][5];
+
+				check_car_s += ((double)prev_size * 0.02 * check_speed); //extrapolate veh s position
+				double dist = check_car_s-car_s; //extrapolated distance
+				cout<<"current dist: " << dist << "\n";
+				if ((check_car_s > car_s) && ((dist)< 50)) // car close in front //org value 20
+				{
+					//cout<<"found slow car in front of my lane " << lane << "\n";
+					//cout<<"dist error: " << dist << "\n";
+					pid.UpdateError(dist-20); //try to keep distance to car in front of about 20m
+					too_close = true;
+					cout<<"		Timer: " << timer << "\n";
+					cout<<"		last_change: " << last_lane_change << "\n";
+					cout<<"found slow car in front of my lane " << lane << "\n";
+
+					// check if anyone is changing lanes, if so delay own switching
+					bool delay = find_lane_change(lane, sensor_fusion, prev_size, car_s);
+					if (delay)
+						{last_lane_change = timer;}
+
+					if ( (timer - last_lane_change) > 200)
+						{r_lane = consider_change(lane, sensor_fusion, check_speed, car_s_current, prev_size, dist);}
+
+					if (r_lane != lane)
+						{last_lane_change = timer;
+						lane = r_lane;
+						}
+
+					}
+          		}
 
           	if(too_close)
           	{
-          		ref_vel -= .224;
+
+          		double corrective_acc = pid.TotalError(); //get new acc value
+          		//cout<<"corrective_acc: " << corrective_acc << "\n";
+
+          		//cout<<"ref_vel before:" << ref_vel << "\n";
+				if (corrective_acc > 0.224 )
+					{corrective_acc = 0.224;}
+				if (corrective_acc < -0.224)
+					{corrective_acc = -0.224;}
+
+				if (ref_vel >= 49.5 && corrective_acc > 0)
+					{
+					corrective_acc = 0.0;
+					}
+				ref_vel += corrective_acc;
+				//cout<<" 	new ref_vel:" << ref_vel << "\n";
+
           	}
           	else if (ref_vel <49.5)
           	{
+          		cout<<"speeding up \n";
           		ref_vel += .224;
           	}
 
@@ -345,9 +415,9 @@ int main() {
 
             // set intermediate waypoints in 30m increments for current lane
             int current_d = 2 + (4 * lane) ;  // center of current lane in frenet d coords
-            vector <double> next_wp0 = getXY(car_s + 40, current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            vector <double> next_wp1 = getXY(car_s + 80, current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-			vector <double> next_wp2 = getXY(car_s + 120, current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            vector <double> next_wp0 = getXY(car_s + (wp_spacing * 1), current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            vector <double> next_wp1 = getXY(car_s + (wp_spacing * 2), current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+			vector <double> next_wp2 = getXY(car_s + (wp_spacing * 3), current_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
 
 
@@ -383,7 +453,7 @@ int main() {
 
 
 				//prepare interpolation for splint segments
-				double target_x = 40.0;
+				double target_x = wp_spacing;
 				double target_y = s(target_x);
 				double target_dist = sqrt((target_x*target_x) + (target_y*target_y));
 				double x_add_on = 0 ;
@@ -411,14 +481,6 @@ int main() {
 				}
 			}
 
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-			//std::cout << car_y;
-			//std::cout << "next batch:";
-			//std::cout << next_y_vals[0];
-
-
-
-
 
 
 			json msgJson;
@@ -432,6 +494,7 @@ int main() {
 
           	//this_thread::sleep_for(chrono::milliseconds(1000));
           	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          	timer += 1;
           
         }
       } else {
