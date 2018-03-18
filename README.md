@@ -16,23 +16,20 @@ acceleration values if no obstacles are present, up to a speed just below the sp
 
 
 If the car encounters a slow moving vehicle in its own lane within a certain distance it tries to switch lanes if possible:
--the ego-vehicle will try to maintain a safe distance to the leading vehicle by using distance to leading vehicle in Frenet coordinates as input to a PID controller. It identifies the closest vehicle in the same lane and maintains a distance of 20 meters.
--the ego vehicle will check other lanes by getting the minimum speed of vehicles in front per lane, unless a lane-change was performed recently
-	-the car will try to change into an adjacent lane if the minimum speed there is higher than in its own lane
-		-if the car is in center lane it will try to pick the faster of the two remaining lanes
-		-if the car is in the right or left lane it will switch to the adjacent lane if the speed there is better
-		-if the car is in the right or left lane and the speed in adjacent lane is worse, but the speed in the far lane is much better it will still try to switch to 
-		the adjacent lane (and then re-evaluate in the next cycle)
-	-for the target lane the following feasibility test is performed:
-		-for each car in target lane extrapolate position, extrapolate own position based on remaining points in path sent to simulator
+- the ego-vehicle will try to maintain a safe distance to the leading vehicle by using distance to leading vehicle in Frenet coordinates as input to a PID controller. It identifies the closest vehicle in the same lane and maintains a distance of 20 meters.
+- the ego vehicle will check other lanes by getting the minimum speed of vehicles in front per lane, unless a lane-change was performed recently
+	- the car will try to change into an adjacent lane if the minimum speed there is higher than in its own lane
+		- if the car is in center lane it will try to pick the faster of the two remaining lanes
+		- if the car is in the right or left lane it will switch to the adjacent lane if the speed there is better
+		- if the car is in the right or left lane and the speed in adjacent lane is worse, but the speed in the far lane 		 is much better it will still try to switch to the adjacent lane (and then re-evaluate in the next cycle)
+	- for the target lane the following feasibility test is performed:
+		- for each car in target lane extrapolate position, extrapolate own position based on remaining points in path      		    sent to simulator
 		- get distance to car based on current and extrapolated positions
-		-if no cars are within these two distances the target lane is returned to main.cpp for execution, otherwise the current lane is returned
+		- if no cars are within these two distances the target lane is returned to main.cpp for execution, otherwise the 		current lane is returned
 
-A simple function to check for lane changes of other cars is used to increment the timer that prevents lane changes of the ego-car. This could not be tested
-well as lane-changes by other cars did not occur frequently.
+A simple function to check for lane changes of other cars is used to increment the timer that prevents lane changes of the ego-car. This could not be tested well as lane-changes by other cars did not occur frequently.
 
-Some tuneable parameters are the range up to which vehicles in front are considered for the minimum lane speed as well as the safety distance before 
-lane changes. The controller probably also needs some tuning.
+Some tuneable parameters are the range up to which vehicles in front are considered for the minimum lane speed as well as the safety distance before lane changes. The controller probably also needs some tuning.
 
 
    
